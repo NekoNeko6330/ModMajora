@@ -35,18 +35,23 @@ endif
 
 #### Defaults ####
 
+# Build target:
+#   n64    N64 ROM (default)
+#   recomp Majora's Mask: Recompiled mod (.nrm), built with `make nrm` (see docs/recomp.md)
+TARGET ?= n64
 # Target game version. Currently only the following versions are supported:
 #   n64-jp-1.1 N64 Japan 1.1 (WIP)
 #   n64-us     N64 USA (default)
 VERSION ?= n64-us
 # If COMPARE is 1, check the output md5sum after building
-COMPARE ?= 1
+COMPARE ?= 0
 # If NON_MATCHING is 1, define the NON_MATCHING C flag when building
-NON_MATCHING ?= 0
+NON_MATCHING ?= 1
 # If ORIG_COMPILER is 1, compile with QEMU_IRIX and the original compiler
 ORIG_COMPILER ?= 0
 # If COMPILER is "gcc", compile with GCC instead of IDO.
-COMPILER ?= ido
+# For a matching build, use `make COMPILER=ido NON_MATCHING=0 COMPARE=1`
+COMPILER ?= gcc
 # if WERROR is 1, pass -Werror to CC_CHECK, so warnings would be treated as errors
 WERROR ?= 0
 # Keep .mdebug section in build
@@ -106,12 +111,29 @@ endif
 PROJECT_DIR   := $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
 
 BASEROM_DIR   := baseroms/$(VERSION)
-BUILD_DIR     := build/$(VERSION)
+# Builds with different compilers go to different directories, so their objects are never mixed
+ifeq ($(COMPILER),ido)
+  BUILD_DIR   := build/$(VERSION)-ido
+else
+  BUILD_DIR   := build/$(VERSION)
+endif
 EXTRACTED_DIR := extracted/$(VERSION)
 EXPECTED_DIR  := expected/$(BUILD_DIR)
 
 VERSION_MACRO := $(shell echo $(VERSION) | tr a-z-. A-Z__)
 GAME_VERSION := -DMM_VERSION=$(VERSION_MACRO)
+
+# Build target and feature overrides (see include/modmajora_config.h)
+ifeq ($(TARGET),n64)
+  TARGET_DEFINES := -DTARGET_N64=1
+else ifeq ($(TARGET),recomp)
+  TARGET_DEFINES := -DTARGET_RECOMP=1
+else
+  $(error Unsupported TARGET "$(TARGET)". Use n64 or recomp.)
+endif
+# Any FEATURE_X=value variable (e.g. `make FEATURE_CUSTOM_CAMERA=1`) overrides that feature's default
+FEATURE_OVERRIDES := $(foreach v,$(sort $(filter FEATURE_%,$(.VARIABLES))),-D$(v)_OVERRIDE=$($(v)))
+GAME_VERSION += $(TARGET_DEFINES) $(FEATURE_OVERRIDES)
 
 
 #### Tools ####
@@ -510,13 +532,13 @@ $(SHIFTJIS_O_FILES): CC_CHECK_WARNINGS += -Wno-multichar -Wno-type-limits -Wno-o
 rom: $(ROM)
 ifneq ($(COMPARE),0)
 	@md5sum $(ROM)
-	@md5sum -c $(BASEROM_DIR)/checksum.md5
+	@sed "s|build/$(VERSION)/|$(BUILD_DIR)/|" $(BASEROM_DIR)/checksum.md5 | md5sum -c -
 endif
 
 compress: $(ROMC)
 ifneq ($(COMPARE),0)
 	@md5sum $(ROMC)
-	@md5sum -c $(BASEROM_DIR)/checksum-compressed.md5
+	@sed "s|build/$(VERSION)/|$(BUILD_DIR)/|" $(BASEROM_DIR)/checksum-compressed.md5 | md5sum -c -
 endif
 
 
