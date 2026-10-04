@@ -9,7 +9,7 @@ from ..extase import (
     Resource,
 )
 
-# from tools import csdis
+from tools import csdis
 
 Z64HDRPRFX = "z64"
 
@@ -27,10 +27,7 @@ class CutsceneResource(Resource, can_size_be_unknown=True):
         if num_bytes % 4 != 0:
             data = data[: -(num_bytes % 4)]
         data_words = [unpacked[0] for unpacked in struct.iter_unpack(">I", data)]
-        # TODO MM doesn't have csdis.py
-        # size_words, cs_source = csdis.disassemble_cutscene(data_words)
-        size_words = 1
-        cs_source = f"{data_words[0]:#X}"
+        size_words, cs_source = csdis.disassemble_cutscene(data_words)
         self.range_end = self.range_start + 4 * size_words
         self.cs_source = cs_source
         return RESOURCE_PARSE_SUCCESS
@@ -63,6 +60,7 @@ class CutsceneResource(Resource, can_size_be_unknown=True):
             # TODO these are not always needed:
             Z64HDRPRFX + "ocarina.h",  # for OCARINA_ACTION_*
             Z64HDRPRFX + "player.h",  # for PLAYER_CUEID_*
+            "sequence.h",  # for NA_BGM_*
         )
 
     def get_h_includes(self):
