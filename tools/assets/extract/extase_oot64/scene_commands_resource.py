@@ -27,6 +27,8 @@ from . import scene_rooms_resources
 from . import collision_resources
 from . import room_shape_resources
 from . import misc_resources
+from . import animated_materials
+from . import scene_mm_resources
 
 Z64HDRPRFX = "z64"
 
@@ -123,6 +125,15 @@ class SceneCommandsResource(Resource, can_size_be_unknown=True):
         self.player_entry_list_length = None
         self.room_list_length = None
         self.exit_list_length = None
+        # For alternate headers, the main header (set by AltHeadersResource)
+        self.main_header: "SceneCommandsResource | None" = None
+
+    def get_room_list_length(self):
+        if self.room_list_length is not None:
+            return self.room_list_length
+        if self.main_header is not None:
+            return self.main_header.room_list_length
+        return None
 
     def try_parse_data(self, memory_context: "MemoryContext"):
         assert self.file.data is not None
@@ -364,7 +375,7 @@ class SceneCommandsResource(Resource, can_size_be_unknown=True):
 
             if cmd_id == SceneCmdId.SCENE_CMD_ID_ALTERNATE_HEADER_LIST:
                 assert data1 == 0
-                memory_context.report_resource_at_segmented(
+                resource = memory_context.report_resource_at_segmented(
                     self,
                     data2_I,
                     AltHeadersResource,
@@ -372,141 +383,90 @@ class SceneCommandsResource(Resource, can_size_be_unknown=True):
                         file, offset, f"{self.name}_{data2_I:08X}_AltHeaders"
                     ),
                 )
+                resource.main_header = self
                 self.parsed_commands.add(cmd_id)
                 new_progress_done.append(("reported AltHeadersResource", cmd_id))
 
             if cmd_id == SceneCmdId.SCENE_CMD_ID_ANIMATED_MATERIAL_LIST:
-                # TODO implement AnimatedMaterialListResource
-                from ..extase import BinaryBlobResource
-
                 assert data1 == 0
                 memory_context.report_resource_at_segmented(
                     self,
                     data2_I,
-                    BinaryBlobResource,
-                    lambda file, offset: BinaryBlobResource(
+                    animated_materials.AnimatedMaterialResource,
+                    lambda file, offset: animated_materials.AnimatedMaterialResource(
                         file,
                         offset,
-                        offset + 4,
                         f"{self.name}_{data2_I:08X}_AnimatedMaterialList",
                     ),
                 )
                 self.parsed_commands.add(cmd_id)
                 new_progress_done.append(
-                    ("reported AnimatedMaterialListResource", cmd_id)
+                    ("reported AnimatedMaterialResource", cmd_id)
                 )
+
+            def report_array(resource_type, name_suffix: str):
+                resource = memory_context.report_resource_at_segmented(
+                    self,
+                    data2_I,
+                    resource_type,
+                    lambda file, offset: resource_type(
+                        file, offset, f"{self.name}_{data2_I:08X}_{name_suffix}"
+                    ),
+                )
+                resource.set_length(data1)
+                self.parsed_commands.add(cmd_id)
+                new_progress_done.append((f"reported {resource_type.__name__}", cmd_id))
 
             if cmd_id == SceneCmdId.SCENE_CMD_ID_ACTOR_CUTSCENE_LIST:
-                # TODO implement ActorCutsceneListResource
-                from ..extase import BinaryBlobResource
-
-                memory_context.report_resource_at_segmented(
-                    self,
-                    data2_I,
-                    BinaryBlobResource,
-                    lambda file, offset: BinaryBlobResource(
-                        file,
-                        offset,
-                        offset + 4,
-                        f"{self.name}_{data2_I:08X}_ActorCutsceneList",
-                    ),
+                report_array(
+                    scene_mm_resources.ActorCutsceneListResource, "ActorCutsceneList"
                 )
-                self.parsed_commands.add(cmd_id)
-                new_progress_done.append(("reported ActorCutsceneListResource", cmd_id))
-
-            if cmd_id == SceneCmdId.SCENE_CMD_ID_MAP_DATA:
-                # TODO implement MapDataResource
-                from ..extase import BinaryBlobResource
-
-                memory_context.report_resource_at_segmented(
-                    self,
-                    data2_I,
-                    BinaryBlobResource,
-                    lambda file, offset: BinaryBlobResource(
-                        file,
-                        offset,
-                        offset + 4,
-                        f"{self.name}_{data2_I:08X}_MapData",
-                    ),
-                )
-                self.parsed_commands.add(cmd_id)
-                new_progress_done.append(("reported MapDataResource", cmd_id))
 
             if cmd_id == SceneCmdId.SCENE_CMD_ID_CUTSCENE_SCRIPT_LIST:
-                # TODO implement CutsceneScriptListResource
-                from ..extase import BinaryBlobResource
-
-                memory_context.report_resource_at_segmented(
-                    self,
-                    data2_I,
-                    BinaryBlobResource,
-                    lambda file, offset: BinaryBlobResource(
-                        file,
-                        offset,
-                        offset + 4,
-                        f"{self.name}_{data2_I:08X}_CutsceneScriptList",
-                    ),
-                )
-                self.parsed_commands.add(cmd_id)
-                new_progress_done.append(
-                    ("reported CutsceneScriptListResource", cmd_id)
+                report_array(
+                    scene_mm_resources.CutsceneScriptListResource,
+                    "CutsceneScriptList",
                 )
 
             if cmd_id == SceneCmdId.SCENE_CMD_ID_ACTOR_CUTSCENE_CAM_LIST:
-                # TODO implement ActorCutsceneCamListResource
-                from ..extase import BinaryBlobResource
-
-                memory_context.report_resource_at_segmented(
-                    self,
-                    data2_I,
-                    BinaryBlobResource,
-                    lambda file, offset: BinaryBlobResource(
-                        file,
-                        offset,
-                        offset + 4,
-                        f"{self.name}_{data2_I:08X}_ActorCutsceneCamList",
-                    ),
-                )
-                self.parsed_commands.add(cmd_id)
-                new_progress_done.append(
-                    ("reported ActorCutsceneCamListResource", cmd_id)
+                report_array(
+                    scene_mm_resources.ActorCsCamInfoListResource,
+                    "ActorCutsceneCamList",
                 )
 
             if cmd_id == SceneCmdId.SCENE_CMD_ID_MAP_DATA_CHESTS:
-                # TODO implement MapDataChestsResource
-                from ..extase import BinaryBlobResource
-
-                memory_context.report_resource_at_segmented(
-                    self,
-                    data2_I,
-                    BinaryBlobResource,
-                    lambda file, offset: BinaryBlobResource(
-                        file,
-                        offset,
-                        offset + 4,
-                        f"{self.name}_{data2_I:08X}_MapDataChests",
-                    ),
+                report_array(
+                    scene_mm_resources.MapDataChestListResource, "MapDataChests"
                 )
-                self.parsed_commands.add(cmd_id)
-                new_progress_done.append(("reported MapDataChestsResource", cmd_id))
 
             if cmd_id == SceneCmdId.SCENE_CMD_ID_LIGHT_LIST:
-                # TODO implement LightListResource
-                from ..extase import BinaryBlobResource
+                report_array(scene_mm_resources.LightInfoListResource, "LightList")
 
-                memory_context.report_resource_at_segmented(
+            if cmd_id == SceneCmdId.SCENE_CMD_ID_MAP_DATA:
+                assert data1 == 0
+                resource = memory_context.report_resource_at_segmented(
                     self,
                     data2_I,
-                    BinaryBlobResource,
-                    lambda file, offset: BinaryBlobResource(
-                        file,
-                        offset,
-                        offset + 4,
-                        f"{self.name}_{data2_I:08X}_LightList",
+                    scene_mm_resources.MapDataSceneResource,
+                    lambda file, offset: scene_mm_resources.MapDataSceneResource(
+                        file, offset, f"{self.name}_{data2_I:08X}_MapData"
                     ),
                 )
-                self.parsed_commands.add(cmd_id)
-                new_progress_done.append(("reported LightListResource", cmd_id))
+                new_progress_done.append(("reported MapDataSceneResource", cmd_id))
+                room_list_length = self.get_room_list_length()
+                if room_list_length is not None:
+                    resource.set_num_rooms(room_list_length)
+                    self.parsed_commands.add(cmd_id)
+                    new_progress_done.append(
+                        ("passed num_rooms to MapDataSceneResource", cmd_id)
+                    )
+                else:
+                    waiting_for.append(
+                        (
+                            "room list length to pass to MapDataSceneResource",
+                            cmd_id,
+                        )
+                    )
 
         if cmd_id != SceneCmdId.SCENE_CMD_ID_END:
             raise Exception("reached end of data without encountering end marker")
@@ -644,9 +604,11 @@ class SceneCommandsResource(Resource, can_size_be_unknown=True):
                     f.write(", ")
                     f.write(memory_context.get_c_reference_at_segmented(address))
                 if cmd_id == SceneCmdId.SCENE_CMD_ID_LIGHT_LIST:
-                    numLights = data1
                     address = data2_I
-                    f.write(f"{numLights}, ")
+                    f.write(
+                        memory_context.get_c_expression_length_at_segmented(address)
+                    )
+                    f.write(", ")
                     f.write(memory_context.get_c_reference_at_segmented(address))
                 if cmd_id == SceneCmdId.SCENE_CMD_ID_PATH_LIST:
                     assert data1 == 0
@@ -736,19 +698,25 @@ class SceneCommandsResource(Resource, can_size_be_unknown=True):
                     address = data2_I
                     f.write(memory_context.get_c_reference_at_segmented(address))
                 if cmd_id == SceneCmdId.SCENE_CMD_ID_CUTSCENE_SCRIPT_LIST:
-                    numEntries = data1
                     address = data2_I
-                    f.write(f"{numEntries}, ")
+                    f.write(
+                        memory_context.get_c_expression_length_at_segmented(address)
+                    )
+                    f.write(", ")
                     f.write(memory_context.get_c_reference_at_segmented(address))
                 if cmd_id == SceneCmdId.SCENE_CMD_ID_ACTOR_CUTSCENE_LIST:
-                    numEntries = data1
                     address = data2_I
-                    f.write(f"{numEntries}, ")
+                    f.write(
+                        memory_context.get_c_expression_length_at_segmented(address)
+                    )
+                    f.write(", ")
                     f.write(memory_context.get_c_reference_at_segmented(address))
                 if cmd_id == SceneCmdId.SCENE_CMD_ID_ACTOR_CUTSCENE_CAM_LIST:
-                    numCams = data1
                     address = data2_I
-                    f.write(f"{numCams}, ")
+                    f.write(
+                        memory_context.get_c_expression_length_at_segmented(address)
+                    )
+                    f.write(", ")
                     f.write(memory_context.get_c_reference_at_segmented(address))
                 if cmd_id == SceneCmdId.SCENE_CMD_ID_MAP_DATA:
                     assert data1 == 0
@@ -759,9 +727,11 @@ class SceneCommandsResource(Resource, can_size_be_unknown=True):
                     address = data2_I
                     f.write(memory_context.get_c_reference_at_segmented(address))
                 if cmd_id == SceneCmdId.SCENE_CMD_ID_MAP_DATA_CHESTS:
-                    chestCount = data1
                     address = data2_I
-                    f.write(f"{chestCount}, ")
+                    f.write(
+                        memory_context.get_c_expression_length_at_segmented(address)
+                    )
+                    f.write(", ")
                     f.write(memory_context.get_c_reference_at_segmented(address))
 
                 f.write("),\n")
@@ -789,11 +759,14 @@ class SceneCommandsResource(Resource, can_size_be_unknown=True):
 
 
 class AltHeadersResource(CDataArrayResource):
+    # set by SceneCommandsResource
+    main_header: SceneCommandsResource | None = None
+
     def report_elem(resource, memory_context: "MemoryContext", v):
         assert isinstance(v, int)
         address = v
         if address != 0:
-            memory_context.report_resource_at_segmented(
+            alt_header = memory_context.report_resource_at_segmented(
                 resource,
                 address,
                 SceneCommandsResource,
@@ -801,6 +774,7 @@ class AltHeadersResource(CDataArrayResource):
                     file, offset, f"{resource.name}_{address:08X}_Cmds"
                 ),
             )
+            alt_header.main_header = resource.main_header
 
     def write_elem(
         resource, memory_context: "MemoryContext", v, wctx: CDataExtWriteContext

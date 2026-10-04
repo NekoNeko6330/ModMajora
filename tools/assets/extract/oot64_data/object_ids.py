@@ -1,7 +1,7 @@
 # This file was generated from ../../../..//include/tables/object_table.h
 
 DATA = (
-            "OBJECT_UNSET_0",
+            "OBJECT_INVALID",
             "GAMEPLAY_KEEP",
             "GAMEPLAY_FIELD_KEEP",
             "GAMEPLAY_DANGEON_KEEP",

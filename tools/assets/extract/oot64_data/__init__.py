@@ -95,3 +95,13 @@ def get_light_mode(light_mode: int) -> str:
 
 def get_navi_quest_hint_file_id_name(navi_quest_hint_file_id: int) -> str:
     return misc_ids.NAVI_QUEST_HINT_FILE_IDS[navi_quest_hint_file_id]
+
+
+from . import weekeventreg_ids
+
+
+def get_weekeventreg_flag_name(index: int, mask: int) -> str:
+    name = weekeventreg_ids.DATA.get((index, mask))
+    if name is None:
+        return f"PACK_WEEKEVENTREG_FLAG({index}, {mask:#04X})"
+    return name

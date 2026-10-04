@@ -3,7 +3,7 @@
 
 ROOT := ../../../../
 
-DATA_FILES := actor_ids.py object_ids.py scene_table_mini.py
+DATA_FILES := actor_ids.py object_ids.py scene_table_mini.py weekeventreg_ids.py
 
 default:
 	@echo 'Run `make all` or with the appropriate target to (re)build data files'
@@ -46,3 +46,10 @@ scene_table_mini.py: $(ROOT)/include/tables/scene_table.h
 	 -D'DEFINE_SCENE_UNSET(enumValue)=(None, #enumValue),' \
 	 $< >> $@
 	echo ')' >> $@
+
+weekeventreg_ids.py: $(ROOT)/include/z64save.h
+	echo '# This file was generated from $<' > $@
+	echo >> $@
+	echo 'DATA = {' >> $@
+	sed -n -E 's/^#define (WEEKEVENTREG_[A-Z0-9_]+) +PACK_WEEKEVENTREG_FLAG\(([0-9]+), (0x[0-9A-F]+)\).*$$/    (\2, \3): "\1",/p' $< >> $@
+	echo '}' >> $@

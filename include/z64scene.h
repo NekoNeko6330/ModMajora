@@ -452,9 +452,24 @@ typedef struct {
     /* 0x8 */ u8* textureIndexList;
 } AnimatedMatTexCycleParams; // size = 0xC
 
+typedef enum AnimatedMatType {
+    /* 0 */ ANIM_MAT_TYPE_TEX_SCROLL,
+    /* 1 */ ANIM_MAT_TYPE_TWO_TEX_SCROLL,
+    /* 2 */ ANIM_MAT_TYPE_COLOR,
+    /* 3 */ ANIM_MAT_TYPE_COLOR_LERP,
+    /* 4 */ ANIM_MAT_TYPE_COLOR_NON_LINEAR_INTERP,
+    /* 5 */ ANIM_MAT_TYPE_TEX_CYCLE,
+    /* 6 */ ANIM_MAT_TYPE_NONE // Only used by empty lists, not handled by `AnimatedMat_DrawMain`
+} AnimatedMatType;
+
+// The segment number used by an animated material is stored with an offset of 7.
+// The last entry of an animated material list is marked by a negative segment number.
+#define MATERIAL_SEGMENT_NUM(n) ((n) - 7)
+#define LAST_MATERIAL_SEGMENT_NUM(n) (-((n) - 7))
+
 typedef struct {
-    /* 0x0 */ s8 segment;
-    /* 0x2 */ s16 type;
+    /* 0x0 */ s8 segment; // See `MATERIAL_SEGMENT_NUM` and `LAST_MATERIAL_SEGMENT_NUM`
+    /* 0x2 */ s16 type; // See `AnimatedMatType`
     /* 0x4 */ void* params;
 } AnimatedMaterial; // size = 0x8
 

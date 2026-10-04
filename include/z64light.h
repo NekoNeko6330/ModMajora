@@ -43,6 +43,18 @@ typedef struct LightInfo {
     /* 0x2 */ LightParams params;
 } LightInfo; // size = 0xE
 
+// Helpers for statically defining a `LightInfo`.
+// Only the first member of the `LightParams` union (`LightPoint`) can be initialized,
+// so the `LightDirectional` bytes are packed into it.
+#define LIGHT_INFO_POINT(type, x, y, z, r, g, b, drawGlow, radius) \
+    { type, { { x, y, z, { r, g, b }, drawGlow, radius } } }
+
+#define LIGHT_INFO_DIRECTIONAL(x, y, z, r, g, b)                    \
+    { LIGHT_DIRECTIONAL,                                            \
+      { { (s16)((((x) & 0xFF) << 8) | ((y) & 0xFF)),                \
+          (s16)((((z) & 0xFF) << 8) | ((r) & 0xFF)),                \
+          (s16)((((g) & 0xFF) << 8) | ((b) & 0xFF)) } } }
+
 typedef struct Lights {
     /* 0x00 */ u8 enablePosLights;
     /* 0x01 */ u8 numLights;
