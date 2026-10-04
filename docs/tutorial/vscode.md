@@ -57,7 +57,7 @@ You can create a `.vscode/c_cpp_properties.json` file with `C/C++: Edit Configur
                 "_LANGUAGE_C" // For gbi.h
             ],
             "cStandard": "gnu89", // C89 + some GNU extensions from C99 like C++ comments
-            "cppStandard": "${default}" // Only ZAPD uses C++, so doesn't really matter
+            "cppStandard": "${default}" // No C++ is used, so doesn't really matter
         }
     ],
     "version": 4

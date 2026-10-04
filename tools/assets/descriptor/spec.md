@@ -134,6 +134,12 @@ For CI formats, the TLUT (Texture Look Up Table, or palette) must be specified w
 <Array Name="gNameS16Array" Count="42" Offset="0x1230">
     <Scalar Type="s16"/>
 </Array>
+<Array Name="gNameU8Array" Count="42" Offset="0x1230">
+    <Scalar Type="x8"/>
+</Array>
+<Array Name="gNameDLArray" Count="42" Offset="0x1230">
+    <Pointer Type="Gfx"/>
+</Array>
 ```
 
 An array of vertices, vectors or scalars. The child element determines the array's element type.
@@ -142,7 +148,7 @@ An array of vertices, vectors or scalars. The child element determines the array
 
 `Count` is the length of the array.
 
-The child element may be one of `<Vtx/>` (for `Vtx[]`), `<Vector Type="s16" Dimensions="3"/>` (for `Vec3s[]`) or `<Scalar Type="s16">` (for `s16[]`).
+The child element may be one of `<Vtx/>` (for `Vtx[]`), `<Vector Type="s16" Dimensions="3"/>` (for `Vec3s[]`), `<Scalar Type="s16">` (for `s16[]`), `<Scalar Type="x8">` (for `u8[]`) or `<Pointer Type="Gfx"/>` (for `Gfx*[]`, the display lists pointed to are also extracted).
 
 ## `Scene`
 
@@ -299,3 +305,35 @@ Player animation data.
 - Required attributes: `FrameCount`
 
 `FrameCount` is the amount of frames in the animation.
+
+## `TextureAnimation`
+
+```xml
+<TextureAnimation Name="gNameTexAnim" Offset="0x1230"/>
+```
+
+An animated material list (`AnimatedMaterial[]`). The list's parameters (texture scrolls, color keyframes, texture cycles) are also extracted.
+
+## `KeyFrameSkel`
+
+```xml
+<KeyFrameSkel Name="gNameKFSkel" LimbType="Flex" Offset="0x1230"/>
+```
+
+A keyframe skeleton (`KeyFrameSkeleton` or `KeyFrameFlexSkeleton`). Its limbs are also extracted.
+
+- Required attributes: `LimbType`
+
+`LimbType` is one of `Standard` (for `KeyFrameSkeleton`, with `KeyFrameStandardLimb`s) or `Flex` (for `KeyFrameFlexSkeleton`, with `KeyFrameFlexLimb`s).
+
+## `KeyFrameAnimation`
+
+```xml
+<KeyFrameAnimation Name="gNameKFAnim" Skel="0x4560" Offset="0x1230"/>
+```
+
+A keyframe animation (`KeyFrameAnimation`). Its data (bit flags, keyframes, keyframe counts, fixed values) is also extracted.
+
+- Required attributes: `Skel`
+
+`Skel` is the offset of a keyframe skeleton the animation is used with. The skeleton must also be declared as a `KeyFrameSkel` resource, it is used to determine the length of the animation data.
