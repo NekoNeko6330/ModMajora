@@ -261,22 +261,57 @@ def handler_TextureAnimation(
     return TextureAnimationResourceDesc(symbol_name, offset, collection, reselem)
 
 
-def handler_KeyFrameAnimation(
-    symbol_name, offset, collection: ResourcesDescCollection, reselem: Element
-):
-    # TODO implement KeyFrameAnimation
-    from .n64resources import BlobResourceDesc
+class KeyFrameSkelLimbType(enum.Enum):
+    STANDARD = enum.auto()
+    FLEX = enum.auto()
 
-    return BlobResourceDesc(symbol_name, offset, collection, reselem, 4)
+
+@dataclasses.dataclass(eq=False)
+class KeyFrameSkelResourceDesc(ResourceDesc):
+    limb_type: KeyFrameSkelLimbType
+
+    def get_size(self):
+        return 8
 
 
 def handler_KeyFrameSkel(
     symbol_name, offset, collection: ResourcesDescCollection, reselem: Element
 ):
-    # TODO implement KeyFrameSkel
-    from .n64resources import BlobResourceDesc
+    xml_errors.check_attrib(reselem, {"Name", "LimbType"}, {"Offset"})
+    limb_type = KeyFrameSkelLimbType[reselem.attrib["LimbType"].upper()]
+    return KeyFrameSkelResourceDesc(symbol_name, offset, collection, reselem, limb_type)
 
-    return BlobResourceDesc(symbol_name, offset, collection, reselem, 4)
+
+@dataclasses.dataclass(eq=False)
+class KeyFrameAnimationResourceDesc(ResourceDesc):
+    skeleton: KeyFrameSkelResourceDesc
+
+    def get_size(self):
+        return 0x14
+
+
+def handler_KeyFrameAnimation(
+    symbol_name, offset, collection: ResourcesDescCollection, reselem: Element
+):
+    xml_errors.check_attrib(reselem, {"Name", "Skel"}, {"Offset"})
+    res = KeyFrameAnimationResourceDesc(symbol_name, offset, collection, reselem, None)
+
+    skel_offset = int(reselem.attrib["Skel"], 16)
+
+    def pass2_callback(pool):
+        matching_resources = [
+            res for res in collection.resources if res.offset == skel_offset
+        ]
+        assert len(matching_resources) == 1, (
+            f"Found {len(matching_resources)} resources at Skel "
+            f"0x{skel_offset:X} instead of exactly one"
+        )
+        assert isinstance(
+            matching_resources[0], KeyFrameSkelResourceDesc
+        ), matching_resources[0]
+        res.skeleton = matching_resources[0]
+
+    raise ResourceHandlerNeedsPass2Exception(res, pass2_callback)
 
 
 @dataclasses.dataclass(eq=False)

@@ -28,6 +28,7 @@ from .extase_oot64 import (
     skelanime_legacy_resources,
     room_shape_resources,
     animated_materials,
+    keyframe_resources,
 )
 
 #
@@ -440,6 +441,27 @@ def register_resource_handlers():
             file, resource_desc.offset, resource_desc.symbol_name
         )
 
+    def keyframe_skel_resource_handler(
+        file: File, resource_desc: z64resources.KeyFrameSkelResourceDesc
+    ):
+        return keyframe_resources.KeyFrameSkeletonResource(
+            file,
+            resource_desc.offset,
+            resource_desc.symbol_name,
+            resource_desc.limb_type == z64resources.KeyFrameSkelLimbType.FLEX,
+        )
+
+    def keyframe_animation_resource_handler(
+        file: File, resource_desc: z64resources.KeyFrameAnimationResourceDesc
+    ):
+        return keyframe_resources.KeyFrameAnimationResource(
+            file,
+            resource_desc.offset,
+            resource_desc.symbol_name,
+            resource_desc.skeleton.offset,
+            resource_desc.skeleton.limb_type == z64resources.KeyFrameSkelLimbType.FLEX,
+        )
+
     def HACK_PLACEHOLDER_resource_handler(file: File, resource_desc: ResourceDesc):
         return BinaryBlobResource(
             file,
@@ -476,6 +498,8 @@ def register_resource_handlers():
             n64resources.U8ArrayResourceDesc: HACK_PLACEHOLDER_resource_handler,
             n64resources.GfxPointerArrayResourceDesc: HACK_PLACEHOLDER_resource_handler,
             z64resources.TextureAnimationResourceDesc: animated_material_resource_handler,
+            z64resources.KeyFrameSkelResourceDesc: keyframe_skel_resource_handler,
+            z64resources.KeyFrameAnimationResourceDesc: keyframe_animation_resource_handler,
         }
     )
 
