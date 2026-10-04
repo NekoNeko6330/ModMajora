@@ -8,7 +8,8 @@
     - [`tools/overlayhelpers/actor_symbols.py`](#toolsoverlayhelpersactor_symbolspy)
     - [`tools/first_diff.py`](#first_diffpy)
     - [`tools/sym_info.py`](#sym_infopy)
-    - [`extract_assets.py`](#extract_assetspy)
+    - [`extract_assets.sh`](#toolsextract_assetssh)
+    - [`csdis.py`](#toolscsdispy)
     - [`tools/assist.py`](#toolsassistpy)
     - [`tools/get_actor_sizes.py`](#toolsget_actor_sizespy)
     - [`tools/progress.py`](#toolsprogresspy)
@@ -121,9 +122,17 @@ $ ./tools/sym_info.py ObjTree_Init
 Symbol ObjTree_Init (RAM: 0x80B9A0B0, ROM: 0xFFF210, build/n64-us/src/overlays/actors/ovl_Obj_Tree/z_obj_tree.o)
 ```
 
-### `extract_assets.py`
+### `tools/extract_assets.sh`
 
-A tool that will use ZAPD to extract assets from the baserom.
+Runs the assets extraction tool (`tools/assets/extract`), which extracts assets from the baserom according to the xmls in `assets/xml/`. See [the assets extraction documentation](assets/extraction.md).
+
+### `tools/csdis.py`
+
+Disassembles a cutscene script into cutscene command macros, given a file and the offset of the cutscene in that file. E.g.
+
+```bash
+$ ./tools/csdis.py extracted/n64-us/baserom/Z2_00KEIKOKU 9D8
+```
 
 ### `tools/assist.py`
 
@@ -311,7 +320,7 @@ Extracts a damagetable from its address. Can also reconvert existing damagetable
 
 ### `tools/vtxdis`
 
-Extracts vertex data from a file. Essentially irrelevant since MM requires extracting this data with ZAPD anyway.
+Extracts vertex data from a file. Essentially irrelevant since MM extracts this data with the assets extraction tool anyway.
 
 ### Reservation Tracking
 

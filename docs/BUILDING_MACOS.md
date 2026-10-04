@@ -1,7 +1,5 @@
 # Building on macOS
 
-**N.B. C++17 is required to build the asset processing program that we use (ZAPD), so check your OS version can support this before proceeding**
-
 ## Dependencies
 
 For macOS, use Homebrew to install the following dependencies:
@@ -9,7 +7,6 @@ For macOS, use Homebrew to install the following dependencies:
 * coreutils
 * make
 * python3
-* libpng
 * bash
 * libxml2
 * libiconv
@@ -18,7 +15,7 @@ You can install them with the following commands:
 
 ```bash
 brew update
-brew install coreutils make python3 libpng bash libxml2 libiconv
+brew install coreutils make python3 bash libxml2 libiconv
 ```
 
 (The repository expects Homebrew-installed programs to be either linked correctly in `$PATH` etc. or in their default locations.)

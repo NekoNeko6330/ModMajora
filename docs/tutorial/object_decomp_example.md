@@ -50,7 +50,7 @@ We can now start naming the skeleton and individual limbs. Since we know this pa
 <Skeleton Name="gKingsChamberDekuGuardSkel" Type="Normal" LimbType="Standard" LimbNone="KINGS_CHAMBER_DEKU_GUARD_LIMB_NONE" LimbMax="KINGS_CHAMBER_DEKU_GUARD_LIMB_MAX" EnumName="KingsChamberDekuGuardLimb" Offset="0x2DD8" />
 ```
 
-Now we can run `./extract_assets.py -s objects/object_dns` to extract the object again, this time with our new names. What can we do with this? Quite a bit actually. In `z_en_dns.h`, we can add this to the top of the file to start using these new names in our code:
+Now we can run `./tools/extract_assets.sh n64-us -s object_dns` to extract the object again, this time with our new names. What can we do with this? Quite a bit actually. In `z_en_dns.h`, we can add this to the top of the file to start using these new names in our code:
 
 ```c
 #include "objects/object_dns/object_dns.h"
@@ -107,7 +107,7 @@ After naming the animations, the end result will look something like this:
 <Animation Name="gKingsChamberDekuGuardWalkAnim" Offset="0x34EC" />
 ```
 
-Once again, we can run `./extract_assets.py -s objects/object_dns` to extract the object, and we can update the animation names in `z_en_dns.c` to use our new names like so:
+Once again, we can run `./tools/extract_assets.sh n64-us -s object_dns` to extract the object, and we can update the animation names in `z_en_dns.c` to use our new names like so:
 
 ```c
 static AnimationInfoS sAnimationInfo[] = {
@@ -165,7 +165,7 @@ Now, we just have to name them. In [Step #1](#step-1-naming-the-skeleton-and-lim
 <Texture Name="gKingsChamberDekuGuardEyeClosedTex" OutName="kings_chamber_deku_guard_eye_closed" Format="rgba16" Width="8" Height="8" Offset="0x29E8" />
 ```
 
-Like with previous steps, we can run `./extract_assets.py -s objects/object_dns` and then update `z_en_dns.c` with our new names:
+Like with previous steps, we can run `./tools/extract_assets.sh n64-us -s object_dns` and then update `z_en_dns.c` with our new names:
 
 ```c
 static TexturePtr sEyeTextures[] = {
@@ -200,7 +200,7 @@ We can name the display list as such in the XML:
 <DList Name="gKingsChamberDekuGuardDekuFlowerDL" Offset="0x2C48" />
 ```
 
-Then, like all steps before, we can run `./extract_assets.py -s objects/object_dns` and then update `z_en_dns.c` with our new name:
+Then, like all steps before, we can run `./tools/extract_assets.sh n64-us -s object_dns` and then update `z_en_dns.c` with our new name:
 
 ```c
 gSPDisplayList(POLY_OPA_DISP++, gKingsChamberDekuGuardDekuFlowerDL);
@@ -238,7 +238,7 @@ Either way you go about it, you should be able to name all the limb display list
 <DList Name="gKingsChamberDekuGuardRightLeafDL" Offset="0x1DD8" />
 ```
 
-Run `./extract_assets.py -s objects/object_dns` once again, since it will help in the next step to have all of our display lists named.
+Run `./tools/extract_assets.sh n64-us -s object_dns` once again, since it will help in the next step to have all of our display lists named.
 
 ### Step #6: Naming remaining textures
 

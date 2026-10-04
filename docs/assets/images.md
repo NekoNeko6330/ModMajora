@@ -1,0 +1,63 @@
+# Images
+
+Images in the rom are in N64 image formats.
+On extraction, they are converted to png and written to `extracted/VERSION/`.
+On build, they are converted back to N64 formats and written as C arrays to `.inc.c` files in `build/VERSION/`.
+
+The build system will also pick up images in `assets/`, allowing modders to add or even [replace](#replacing-images) images.
+
+PNG files have suffixes indicating how they are to be converted. For example, a `gDekuStickTex.i8.png` file will be converted to `i8`.
+
+The valid formats are `rgba32`, `rgba16`, `i4`, `i8`, `ia4`, `ia8`, `ia16`, `ci4`, `ci4_rgba16`, `ci4_ia16`, `ci8`, `ci8_rgba16`, `ci8_ia16`.
+
+An optional suffix can be used to indicate the element type of the C array written out, for example `.u32` in `sObjJgameLightCorrectTex.ia16.u32.png`. The valid array element types are `u64` and `u32`. If omitted, the element type defaults to `u64`. `u32` is only used for unaligned textures.
+
+The tool implementing png->n64 conversion is [build_from_png](../../tools/assets/build_from_png/build_from_png.c), using [n64texconv](../../tools/assets/n64texconv/) as its backbone.
+
+# Replacing images
+
+The contents of `extracted/` are meant to hold the baserom assets and should not be modified. Instead, replacing an image can be done by creating a png file at the same relative path under `assets/` as the image to replace.
+
+For example, replacing `gDekuStickTex` (`extracted/n64-us/assets/objects/gameplay_keep/gDekuStickTex.i8.png`) with another i8 texture `newStick.i8.png`:
+
+```sh
+mkdir -p assets/objects/gameplay_keep/
+cp newStick.i8.png assets/objects/gameplay_keep/gDekuStickTex.i8.png
+
+# Cause make to rebuild gameplay_keep, where gDekuStickTex is
+touch extracted/n64-us/assets/objects/gameplay_keep/gameplay_keep.c
+
+make
+```
+
+# CI images
+
+CI (Color Indexed) images also have a palette or TLUT (Texture Look-Up Table).
+
+The CI formats are `ci4`, `ci4_rgba16`, `ci4_ia16`, `ci8`, `ci8_rgba16`, `ci8_ia16`. The first three indicate a CI4 image. The last three indicate a CI8 image. The `_rgba16` and `_ia16` suffixes indicate that the palette is to be in RGBA16 or IA16 format respectively. By default (if using plain `ci4` or `ci8`) the palette is RGBA16.
+
+PNG images to be converted to CI formats may have a `.tlut_gNameTLUT[_<u32|u64>]` suffix indicating the name and element type (optional, defaults to u64) of the TLUT `gNameTLUT.tlut.rgba16[.<u32|u64>].inc.c` file to write the palette to.
+
+If this suffix is omitted, the TLUT will be written to a `gNameTex.tlut.rgba16.inc.c` file named after the CI image.
+
+For example without the `.tlut_` suffix, `gKokiriSwordHandleCrossGuardTex.ci8.png`:
+
+- extracted to `extracted/VERSION/assets/objects/gameplay_keep/gKokiriSwordHandleCrossGuardTex.ci8.png`
+- texture written to `build/VERSION/assets/objects/gameplay_keep/gKokiriSwordHandleCrossGuardTex.ci8.inc.c`
+- palette written to `build/VERSION/assets/objects/gameplay_keep/gKokiriSwordHandleCrossGuardTex.tlut.rgba16.inc.c`
+
+For example with the `.tlut_` suffix, `gBombShopLadySkinTex.ci8.tlut_gBombShopLadyTLUT.png`:
+
+- extracted to `extracted/VERSION/assets/objects/object_bba/gBombShopLadySkinTex.ci8.tlut_gBombShopLadyTLUT.png`
+- texture written to `build/VERSION/assets/objects/object_bba/gBombShopLadySkinTex.ci8.tlut_gBombShopLadyTLUT.inc.c`
+- palette written to `build/VERSION/assets/objects/object_bba/gBombShopLadyTLUT.tlut.rgba16.inc.c`
+
+CI images with a `.tlut_` suffix have a shared palette: there are several CI images using the same palette.
+The build system (`build_from_png`) will find images sharing the same palette by looking at the `.tlut_` suffixes of png files in the same folder and in the corresponding `assets/` folder.
+
+In the matching case of shared palettes, all png files have the same palette, which is written out.
+Otherwise the images are automatically co-quantized and the resulting images and palette are written out.
+
+### Automatic Palette Generation
+
+`n64texconv` supports automatically generating palettes when converting a png without a stored palette to a CI formatted image. However note that this process makes a number of assumptions about alpha channel handling for RGBA16 palettes. If using a CI image with an alpha channel it is strongly recommended to pre-generate a palette externally to ensure the results are optimal for the particular use. `n64texconv` will convert the alpha channel to single-bit with a fixed threshold of 128 and set the rgb content of all transparent pixels to transparent black, prioritizing filling the generated palette with visible pixels. This comes at the cost of black texture samples bleeding into visible pixels when filtered. Especially for CI4, since there are only 16 channels it is inadvisable to rely on correct bilinear sampling adjacent to alpha pixels, as storing multiple transparent pixels with different rgb contents will starve the palette of visible colors.

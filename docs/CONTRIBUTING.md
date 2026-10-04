@@ -125,7 +125,7 @@ If there is an error, double-check that you can successfully
 
 ```bash
 make disasm
-./extract_assets.py -f
+make assets
 make clean
 make
 ```
