@@ -11,6 +11,7 @@
  */
 
 #include "z_en_okuta.h"
+#include "z_en_item00.h"
 #include "overlays/actors/ovl_En_Clear_Tag/z_en_clear_tag.h"
 
 #define FLAGS (ACTOR_FLAG_ATTENTION_ENABLED | ACTOR_FLAG_HOSTILE)
@@ -166,8 +167,8 @@ void EnOkuta_Init(Actor* thisx, PlayState* play2) {
         thisx->floorHeight =
             BgCheck_EntityRaycastFloor5(&play->colCtx, &thisx->floorPoly, &bgId, thisx, &thisx->world.pos);
 
-        if (!WaterBox_GetSurface1_2(play, &play->colCtx, thisx->world.pos.x, thisx->world.pos.z, &waterSurface,
-                                    &waterBox) ||
+        if (!BgCheck_GetWaterSurfaceNoBgId(play, &play->colCtx, thisx->world.pos.x, thisx->world.pos.z, &waterSurface,
+                                           &waterBox) ||
             waterSurface <= thisx->floorHeight) {
             Actor_Kill(thisx);
         } else {

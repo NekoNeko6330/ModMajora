@@ -5,6 +5,7 @@
  */
 
 #include "z_en_ishi.h"
+#include "z_en_item00.h"
 #include "z64quake.h"
 #include "z64rumble.h"
 #include "assets/objects/gameplay_field_keep/gameplay_field_keep.h"
@@ -395,7 +396,7 @@ s32 EnIshi_IsUnderwater(EnIshi* this, PlayState* play) {
     f32 waterSurface;
     s32 bgId;
 
-    if (WaterBox_GetSurfaceImpl(play, &play->colCtx, this->actor.world.pos.x, this->actor.world.pos.z, &waterSurface,
+    if (BgCheck_GetWaterSurface(play, &play->colCtx, this->actor.world.pos.x, this->actor.world.pos.z, &waterSurface,
                                 &waterBox, &bgId) &&
         (this->actor.world.pos.y < waterSurface)) {
         return true;
