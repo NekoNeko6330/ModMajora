@@ -21,7 +21,7 @@ from pathlib import Path
 import re
 import tomllib
 
-from .objfile import Chunk, Key, ObjectFile, anon_cmp_key
+from .objfile import R_MIPS_32, Chunk, Key, ObjectFile, anon_cmp_key
 
 
 @dataclasses.dataclass
@@ -104,7 +104,9 @@ class ChunkIndex:
             for chunk in obj.chunks:
                 if chunk.key in self.by_key:
                     self.duplicates.append(chunk.key)
-                    continue
+                    if not (chunk.kind.startswith(".") and not self.by_key[chunk.key].kind.startswith(".")):
+                        continue
+                    # Explicit mod code (e.g. RECOMP_PATCH in recomp/src) replaces the tree's version
                 self.by_key[chunk.key] = chunk
 
     def __contains__(self, key):
@@ -144,11 +146,20 @@ class Selection:
     # Why each chunk was selected (for reporting)
     reasons: dict[Key, str]
     warnings: list[str]
+    # Changed vanilla data patched in place (in the ROM), with the same size and layout:
+    # key -> (vanilla name, relocations as (offset, target recomp symbol name, addend), size)
+    # The size can be smaller than the chunk: data that grew is copied into the mod, and its original
+    # part is also updated in place for the protected functions that keep using the vanilla data.
+    in_place: dict[Key, tuple[str, list[tuple[int, str, int]], int]] = dataclasses.field(default_factory=dict)
 
 
 def _static_vanilla_name(vs: VanillaSymbols, tu: str, name: str) -> str | None:
-    if "." in name:
-        # gcc-generated names (function-local statics, clones like .constprop.0): no vanilla counterpart
+    m = re.match(r"^([A-Za-z_]\w*)\.\d+$", name)
+    if m is not None:
+        # gcc function-local static (name.N): matched with the vanilla static of the same name, if unique
+        name = m.group(1)
+    elif "." in name:
+        # gcc-generated names (clones like .constprop.0): no vanilla counterpart
         return None
     ranges = vs.tu_ranges.get(tu)
     if not ranges:
@@ -194,6 +205,8 @@ def select(
     vs: VanillaSymbols,
     changed_values: set[str],
     forced_new_tus: set[str] = frozenset(),
+    sections: list[tuple[int, int, bool]] = (),
+    protected: set[str] = frozenset(),
 ) -> Selection:
     """Select the chunks that go in the mod.
 
@@ -201,6 +214,15 @@ def select(
     version of the game differs from vanilla.
     forced_new_tus: translation units whose content is entirely new (e.g. new actors), all their chunks
     are put in the mod.
+    sections: vanilla code sections as (vram start, vram end, relocatable), used to check that data
+    patched in place in overlays keeps the same relocations.
+
+    Changed vanilla data that keeps its size, and only points to vanilla addresses, is patched in place
+    (in the ROM: recomp loads code segments data from the ROM). Other changed data is copied into the
+    mod, and everything using it is patched to use the copy.
+    protected: names of vanilla functions that should not be patched only because they use data copied
+    into the mod (functions already patched by the recomp). They keep using the vanilla data, whose
+    original part is updated in place, if possible.
     """
     warnings: list[str] = []
     reasons: dict[Key, str] = {}
@@ -256,28 +278,147 @@ def select(
                     reasons[key] = f"references {r.target[1]} (moved)"
                     break
 
-    # 3. Closure: everything referencing a changed/new data chunk with a vanilla counterpart
-    #    must use the mod's copy.
+    # 3. Changed data patched in place, and closure: everything referencing changed/new data with a
+    #    vanilla counterpart that is not patched in place must use the mod's copy.
     users: dict[Key, set[Key]] = {}
     for key, chunk in current.by_key.items():
         for r in chunk.relocs:
             users.setdefault(r.target, set()).add(key)
 
-    worklist = [k for k, c in selected.items() if not c.is_func and vanilla_name(k) is not None]
-    while worklist:
-        data_key = worklist.pop()
-        for user_key in users.get(data_key, ()):
-            user = current.get(user_key)
-            if user is None or user_key in selected:
+    def section_of(vram: int | None):
+        if vram is None:
+            return None
+        for start, end, relocatable in sections:
+            if start <= vram < end:
+                return (start, end, relocatable)
+        return None
+
+    def target_vram(index: ChunkIndex, target: Key) -> int | None:
+        name = vanilla_name(target) if target in index else (target[1] if target[0] == "g" else None)
+        return vs.vram_by_name.get(name) if name is not None else None
+
+    def internal_offsets(index: ChunkIndex, chunk: Chunk, sec) -> set[int]:
+        return {
+            r.offset for r in chunk.relocs if section_of(target_vram(index, r.target)) == sec
+        }
+
+    in_place: dict[Key, tuple[str, list]] = {}
+    candidates = set()
+    for key, chunk in selected.items():
+        vname = vanilla_name(key)
+        b = base.get(key)
+        if chunk.is_func or chunk.kind not in ("data", "rodata") or vname is None or b is None:
+            continue
+        if b.size != chunk.size or any(r.type != R_MIPS_32 for r in chunk.relocs):
+            continue
+        sec = section_of(vs.vram_by_name.get(vname))
+        if sec is None:
+            continue
+        if sec[2] and internal_offsets(current, chunk, sec) != internal_offsets(base, b, sec):
+            # Overlay data: pointers within the overlay are relocated by the vanilla relocations
+            continue
+        candidates.add(key)
+
+    def in_place_relocs(key: Key, size: int | None = None):
+        relocs = []
+        for r in current.get(key).relocs:
+            if size is not None and r.offset >= size:
                 continue
-            if user.is_anon:
-                # Anonymous chunks are copied with their users anyway, propagate to their users
-                worklist.append(user_key)
+            t = r.target
+            tc = current.get(t)
+            if tc is None:
+                if t[0] != "g":
+                    return None
+                relocs.append((r.offset, t[1], r.addend))
                 continue
-            selected[user_key] = user
-            reasons[user_key] = f"uses {_key_str(data_key)}"
-            if not user.is_func:
-                worklist.append(user_key)
+            tname = None if tc.is_anon else vanilla_name(t)
+            if tname is None or base.get(t) is None:
+                return None
+            if not tc.is_func and t in selected and t not in candidates and t != key:
+                # Points to data copied into the mod
+                return None
+            relocs.append((r.offset, tname, r.addend))
+        return relocs
+
+    closed: set[Key] = set()
+    protected_users: dict[Key, set[Key]] = {}
+    while True:
+        changed = False
+        for key in sorted(candidates, key=str):
+            if in_place_relocs(key) is None:
+                candidates.discard(key)
+                changed = True
+        worklist = [
+            k
+            for k, c in selected.items()
+            # Data copied into the mod, and functions without vanilla counterpart (e.g. gcc's
+            # func.part.0 clones), which can only be reached through patched users
+            if (not c.is_func or vanilla_name(k) is None) and k not in candidates and k not in closed
+        ]
+        while worklist:
+            data_key = worklist.pop()
+            closed.add(data_key)
+            for user_key in users.get(data_key, ()):
+                user = current.get(user_key)
+                if user is None:
+                    continue
+                if user_key in selected:
+                    if user_key in candidates:
+                        # Uses a copy: can't stay at its vanilla address
+                        candidates.discard(user_key)
+                        changed = True
+                    continue
+                if user.is_anon:
+                    # Anonymous chunks are copied with their users anyway, propagate to their users
+                    if user_key not in closed:
+                        worklist.append(user_key)
+                    continue
+                if user.is_func and vanilla_name(user_key) in protected and base.get(user_key) is not None:
+                    protected_users.setdefault(data_key, set()).add(user_key)
+                    continue
+                selected[user_key] = user
+                reasons[user_key] = f"uses {_key_str(data_key)}"
+                changed = True
+                if not user.is_func or vanilla_name(user_key) is None:
+                    worklist.append(user_key)
+        if not changed:
+            break
+
+    for key in candidates:
+        in_place[key] = (vanilla_name(key), in_place_relocs(key), selected[key].size)
+        del selected[key]
+
+    # Protected functions using data copied into the mod keep using the vanilla data
+    for data_key, user_keys in sorted(protected_users.items(), key=lambda kv: str(kv[0])):
+        chunk = current.get(data_key)
+        b = base.get(data_key)
+        vname = vanilla_name(data_key)
+        relocs = None
+        if (
+            not chunk.is_anon
+            and vname is not None
+            and b is not None
+            and chunk.kind in ("data", "rodata")
+            and b.kind == chunk.kind
+            and chunk.size >= b.size
+            and all(r.type == R_MIPS_32 for r in chunk.relocs)
+            and not (section_of(vs.vram_by_name.get(vname)) or (0, 0, True))[2]
+        ):
+            relocs = in_place_relocs(data_key, b.size)
+        user_names = ", ".join(sorted(vanilla_name(k) for k in user_keys))
+        if relocs is None:
+            # Can't keep the vanilla data up to date: patch the users (reported as conflicts)
+            for user_key in user_keys:
+                if user_key not in selected:
+                    selected[user_key] = current.get(user_key)
+                    reasons[user_key] = f"uses {_key_str(data_key)}"
+            continue
+        in_place[data_key] = (vname, relocs, b.size)
+        warnings.append(
+            f"{user_names} (already patched by the recomp) keep using the vanilla {vname}, whose original"
+            f" {b.size:#x} bytes are updated in place; the mod's copy is {chunk.size:#x} bytes"
+            + (" and the two copies are not kept in sync at runtime" if chunk.is_writable else "")
+        )
 
     # 4. Pull in referenced chunks without vanilla counterpart
     externals: dict[Key, str] = {}
@@ -338,6 +479,7 @@ def select(
         externals=externals,
         reasons=reasons,
         warnings=warnings,
+        in_place=in_place,
     )
 
 

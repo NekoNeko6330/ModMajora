@@ -39,7 +39,7 @@
 #define FEATURE_DEFAULT(n64, recomp) (TARGET_RECOMP ? (recomp) : (n64))
 
 // Use in `#if FEATURE(NAME)`.
-// Note: like any undefined macro in `#if`, an undeclared feature evaluates to 0 (`make nrm` warns about it).
+// Note: like any undefined macro in `#if`, an undeclared feature (e.g. a typo) silently evaluates to 0.
 #define FEATURE(name) (FEATURE_##name)
 
 /**

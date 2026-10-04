@@ -156,6 +156,12 @@ Running `make init` will also make the `./expected` directory and copy all of th
 The disadvantage that the ordering of the terminal output is scrambled, so for debugging it is best to stick to one thread (i.e. not pass `-jN`).
 (`-j` also exists, which uses unlimited jobs, but is generally slower.)
 
+### Exporting a Majora's Mask: Recompiled mod
+
+`make nrm` packages all changes made to the game as a mod for
+[Majora's Mask: Recompiled](https://github.com/Zelda64Recomp/Zelda64Recomp) (`build/modmajora.nrm`).
+See [docs/recomp.md](docs/recomp.md).
+
 ## Contributing
 
 All contributions are welcome. This is a group effort, and even small contributions can make a difference.

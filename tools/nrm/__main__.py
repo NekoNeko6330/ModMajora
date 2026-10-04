@@ -9,6 +9,7 @@ See docs/recomp.md for how it works.
 """
 
 import argparse
+import dataclasses
 import os
 from pathlib import Path
 import re
@@ -145,19 +146,26 @@ def main():
     vanilla_syms = read_symbols(base.elf)
     vanilla_code_segments = set(re.findall(r'^name = "\.\.([^"]+)"', base.func_syms.read_text(), re.M))
     vanilla_rom = (ROOT / "baseroms" / version / "baserom.z64").read_bytes()
+    vanilla_rom_uncompressed = (base.root / "build" / f"{version}-ido" / f"mm-{version}.z64").read_bytes()
+    cur_rom_bytes = cur_rom.read_bytes()
+
+    def layout_rom(code_patches={}):
+        return build_rom(
+            vanilla_rom,
+            vanilla_rom_uncompressed,
+            vanilla_syms,
+            vanilla_code_segments,
+            DMADATA_CAPACITY,
+            cur_rom_bytes,
+            cur_elf,
+            cur_syms,
+            cur_symbol_sections,
+            cur_segments,
+            code_patches,
+        )
+
     log("Building the ROM layout")
-    layout = build_rom(
-        vanilla_rom,
-        (base.root / "build" / f"{version}-ido" / f"mm-{version}.z64").read_bytes(),
-        vanilla_syms,
-        vanilla_code_segments,
-        DMADATA_CAPACITY,
-        cur_rom.read_bytes(),
-        cur_elf,
-        cur_syms,
-        cur_symbol_sections,
-        cur_segments,
-    )
+    layout = layout_rom()
     code_segments = vanilla_code_segments | set(layout.new_code_segments)
 
     # 4. Compile the code of both trees with the mod flags
@@ -240,15 +248,58 @@ def main():
     for seg in cur_segments:
         if seg.name in new_code:
             forced_new_tus.update(o[len(build_dir) + 1 : -len(".o")] for o in seg.includes)
-    selection = select(cur_index, base_index, vs, changed_values, forced_new_tus)
-
-    # 7. Conflicts with the base recomp patches
+    relocatable = {
+        line.strip()[2:] for line in (NRM_DIR / f"overlays.{version}.txt").read_text().splitlines() if line.strip()
+    }
+    # Vanilla code segments, as (vram start, vram end of the ROM content, relocatable, name)
+    code_ranges = []
+    for seg in sorted(vanilla_code_segments):
+        start = vanilla_syms.get(f"_{seg}SegmentStart")
+        rom_start = vanilla_syms.get(f"_{seg}SegmentRomStart")
+        rom_end = vanilla_syms.get(f"_{seg}SegmentRomEnd")
+        if start is None or rom_start is None or rom_end is None or rom_end == rom_start:
+            continue
+        code_ranges.append((start, start + rom_end - rom_start, seg in relocatable, seg))
     recomp_patched = {
         line.strip()
         for line in (NRM_DIR / "recomp_patched_functions.txt").read_text().splitlines()
         if line.strip() and not line.startswith("#")
     }
-    conflicts = {k for k in selection.patches if selection.names[k] in recomp_patched}
+    selection = select(
+        cur_index,
+        base_index,
+        vs,
+        changed_values,
+        forced_new_tus,
+        [r[:3] for r in code_ranges],
+        protected=set() if allow_force_patch else recomp_patched,
+    )
+
+    # Changed data patched in place in the code files of the ROM
+    code_patches: dict[str, list[tuple[int, bytes]]] = {}
+    for key, (vname, relocs, size) in sorted(selection.in_place.items(), key=lambda kv: kv[1][0]):
+        chunk = cur_index.get(key)
+        vram = vs.vram_by_name[vname]
+        start, end, _, seg = next(r for r in code_ranges if r[0] <= vram < r[1])
+        assert vram + size <= end, vname
+        data = bytearray(chunk.data[:size])
+        for offset, target, addend in relocs:
+            value = overrides[target] if target in overrides else vs.vram_by_name[target]
+            data[offset : offset + 4] = ((value + addend) & 0xFFFFFFFF).to_bytes(4, "big")
+        code_patches.setdefault(seg, []).append((vram - start, bytes(data)))
+
+    if code_patches:
+        log("Patching data in code files")
+        patched_layout = layout_rom(code_patches)
+        assert patched_layout.rom_symbols == layout.rom_symbols
+        layout = patched_layout
+
+    # 7. Conflicts with the base recomp patches
+    conflicts = {
+        k
+        for k in selection.patches
+        if selection.names[k] in recomp_patched and selection.chunks[k].kind != ".recomp_force_patch"
+    }
     if conflicts and not allow_force_patch:
         lines = [f"  {selection.names[k]}  ({selection.reasons[k]})" for k in sorted(conflicts, key=str)]
         raise SystemExit(
@@ -279,11 +330,36 @@ def main():
         selection.chunks[key] = Chunk(key, "", key[1], False, True, ".rodata", "rodata", bytes(4), 4, 4, [])
         selection.names[key] = key[1]
         selection.reasons[key] = "placeholder"
+    # Linker segment symbols (_xSegmentStart, ...) are link-time constants: make them absolute, so
+    # they can be used in mod data even when they belong to an overlay
+    absolute = dict(overrides)
+    for name in set(selection.externals.values()):
+        if name not in absolute and seg_sym_re.match(name) and name in vanilla_syms:
+            absolute[name] = vanilla_syms[name]
+    # Data of non-relocatable segments (e.g. the actor overlay table in code) holds the link-time
+    # addresses of overlay symbols: reference them through absolute aliases
+    tu_segment = {o[len(build_dir) + 1 : -len(".o")]: seg.name for seg in cur_segments for o in seg.includes}
+    overlay_ranges = [(r[0], r[1]) for r in code_ranges if r[2]]
+    for key, chunk in list(selection.chunks.items()):
+        if chunk.is_func or tu_segment.get(chunk.tu) in relocatable:
+            continue
+        new_relocs = []
+        for r in chunk.relocs:
+            name = selection.externals.get(r.target)
+            vram = vs.vram_by_name.get(name) if name is not None and name not in absolute else None
+            if vram is not None and any(start <= vram < end for start, end in overlay_ranges):
+                alias = name + "__abs"
+                absolute[alias] = vram
+                target = ("g", alias)
+                selection.externals[target] = alias
+                r = dataclasses.replace(r, target=target)
+            new_relocs.append(r)
+        selection.chunks[key] = dataclasses.replace(chunk, relocs=new_relocs)
     mod_o = out_dir / "mod.o"
     write_mod_object(selection, mod_o, conflicts)
     elf = link_mod(mod_o, out_dir)
     data_syms = out_dir / "datasyms.toml"
-    write_data_syms(base.data_syms, data_syms, overrides)
+    write_data_syms(base.data_syms, data_syms, absolute)
 
     additional = []
     rom_changed = layout.rom != vanilla_rom
@@ -297,6 +373,13 @@ def main():
         thumb_path = ROOT / thumb
         shutil.copy2(thumb_path, out_dir / "thumb.png")
         additional.append(out_dir / "thumb.png")
+
+    details = [
+        f"{'PATCH' if k in selection.patches else '     '} {selection.names[k]}: {selection.reasons[k]}"
+        for k in sorted(selection.chunks, key=lambda k: selection.names[k])
+    ]
+    details += [f"INPLACE {vname}" for vname, _, _ in sorted(selection.in_place.values())]
+    (out_dir / "selection.txt").write_text("\n".join(details) + "\n")
 
     nrm = run_mod_tool(
         modtool,
@@ -317,6 +400,8 @@ def main():
     n_new_funcs = sum(1 for k, c in selection.chunks.items() if c.is_func and k not in selection.patches)
     n_data = sum(1 for c in selection.chunks.values() if not c.is_func)
     report.append(f"  {n_patch} patched functions ({len(conflicts)} forced), {n_new_funcs} new functions, {n_data} data")
+    if selection.in_place:
+        report.append(f"  {len(selection.in_place)} vanilla data patched in place (in {', '.join(sorted(code_patches))})")
     if rom_changed:
         report.append(
             f"  ROM patch: {len(layout.changed_segments)} changed files, {len(layout.new_segments)} new files,"
@@ -326,9 +411,7 @@ def main():
         report.append(f"  New code (internal actors): {', '.join(layout.new_code_segments)}")
     report += ["  " + r for r in layout.report]
     report += ["  warning: " + w for w in selection.warnings]
-    lines = [f"{'PATCH' if k in selection.patches else '     '} {selection.names[k]}: {selection.reasons[k]}"
-             for k in sorted(selection.chunks, key=lambda k: selection.names[k])]
-    (out_dir / "report.txt").write_text("\n".join(report + [""] + lines) + "\n")
+    (out_dir / "report.txt").write_text("\n".join(report + [""] + details) + "\n")
     for line in report:
         log(line)
     log(f"Details in {(out_dir / 'report.txt').relative_to(ROOT)} ({time.time() - t0:.0f}s)")

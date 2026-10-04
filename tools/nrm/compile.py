@@ -37,6 +37,8 @@ MOD_CFLAGS = [
     "-fno-tree-loop-distribute-patterns",
     # Tail calls (j) to functions outside the mod are not supported by N64Recomp
     "-fno-optimize-sibling-calls",
+    # Division by zero traps (teq) are not supported by N64Recomp
+    "-mno-check-zero-division",
     # One section per function and data symbol, which makes extracting them easy
     "-ffunction-sections",
     "-fdata-sections",

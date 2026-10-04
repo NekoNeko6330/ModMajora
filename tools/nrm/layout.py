@@ -6,7 +6,8 @@
 Recomp runs vanilla code (recompiled ahead of time), and finds overlay code by vanilla ROM address.
 So this ROM keeps:
 - every vanilla file at its vanilla address
-- code files (boot, code, overlays) with their vanilla content: code changes are in the mod's code
+- code files (boot, code, overlays) with their vanilla content: code changes are in the mod's code.
+  Only changed data that keeps the same layout is patched in place in them (code_patches).
 and only differs from the vanilla ROM in data files (objects, scenes, textures, audio, text, ...):
 - changed data files are written in place if they fit, otherwise moved to the end of the ROM
 - new data files are added at the end of the ROM
@@ -149,7 +150,9 @@ def build_rom(
     current_syms: dict[str, int],
     current_symbol_sections: dict[str, str],
     current_segments: list[Segment],
+    code_patches: dict[str, list[tuple[int, bytes]]] = {},
 ) -> LayoutResult:
+    """code_patches: segment name -> list of (offset in the file, bytes) to write in vanilla code files"""
     report = []
 
     dmadata_vrom = vanilla_syms["_dmadataSegmentRomStart"]
@@ -180,6 +183,7 @@ def build_rom(
         dma_index: int | None  # index of the vanilla dmadata entry
         vrom_start: int
         is_new: bool
+        is_code: bool = False
 
     files: list[File] = []
     for seg in current_segments:
@@ -194,12 +198,20 @@ def build_rom(
         is_code = name in vanilla_code_segments or current_syms.get(f"_{name}SegmentTextSize", 0) > 0
 
         if rom_start_sym in vanilla_syms:
-            if is_code:
-                # Code files keep their vanilla content (changes are in the mod code)
-                continue
             v_start = vanilla_syms[rom_start_sym]
             v_end = vanilla_syms[rom_end_sym]
             index = dma_by_vrom.get(v_start)
+            if is_code:
+                # Code files keep their vanilla content (changes are in the mod code), except for data
+                # patched in place
+                if name in code_patches:
+                    assert index is not None, name
+                    data = bytearray(vanilla_rom_uncompressed[v_start:v_end])
+                    for offset, patch in code_patches[name]:
+                        assert offset + len(patch) <= len(data), (name, offset)
+                        data[offset : offset + len(patch)] = patch
+                    files.append(File(name, data, dma[index].is_compressed, index, v_start, False, True))
+                continue
             if index is None or v_end == v_start:
                 # Not a file (e.g. NOLOAD segment)
                 continue
@@ -225,6 +237,8 @@ def build_rom(
 
     for file in files:
         name = file.name
+        if file.is_code:
+            continue
         new_start, new_end = file.vrom_start, file.vrom_start + len(file.data)
         if file.is_new or (new_start, new_end) != (
             vanilla_syms[f"_{name}SegmentRomStart"],
@@ -237,7 +251,7 @@ def build_rom(
 
     # 2. Fix up the addresses in data files: ROM addresses use the layout above,
     #    and references to code use vanilla addresses.
-    relocs = read_data_relocations(current_elf, {f.name for f in files})
+    relocs = read_data_relocations(current_elf, {f.name for f in files if not f.is_code})
     for file in files:
         for offset, sym_name, addend in relocs.get(file.name, []):
             value = None

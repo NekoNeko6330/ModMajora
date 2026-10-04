@@ -51,6 +51,8 @@ class _StrTab:
 
 
 def _out_section_name(chunk, name: str, is_patch: bool, is_force_patch: bool) -> str:
+    if chunk.kind in (".recomp_patch", ".recomp_force_patch"):
+        return chunk.kind
     if is_force_patch:
         return ".recomp_force_patch"
     if is_patch:
