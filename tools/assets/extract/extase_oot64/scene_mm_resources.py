@@ -27,6 +27,7 @@ from ..extase.cdata_resources import (
 from .. import oot64_data
 from . import misc_resources
 from . import collision_resources
+from . import scene_rooms_resources
 
 Z64HDRPRFX = "z64"
 
@@ -271,7 +272,7 @@ class CutsceneScriptListResource(CDataArrayNamedLengthResource):
             (
                 "nextEntrance",
                 CDataExt_Value("h").set_write_str_v(
-                    lambda v: f"{v:#06X}" if v >= 0 else str(v)
+                    lambda v: scene_rooms_resources.fmt_entrance(v) if v >= 0 else str(v)
                 ),
             ),
             ("spawn", CDataExt_Value.u8),
@@ -286,7 +287,10 @@ class CutsceneScriptListResource(CDataArrayNamedLengthResource):
         return f"CutsceneScriptEntry {self.symbol_name}[{self.length_name}]"
 
     def get_c_includes(self):
-        return (Z64HDRPRFX + "save.h",)  # for WEEKEVENTREG_*
+        return (
+            Z64HDRPRFX + "save.h",  # for WEEKEVENTREG_*
+            Z64HDRPRFX + "scene.h",  # for ENTRANCE
+        )
 
     def get_h_includes(self):
         return (Z64HDRPRFX + "cutscene.h",)

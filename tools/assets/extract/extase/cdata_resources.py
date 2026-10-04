@@ -332,6 +332,48 @@ class CDataResource(Resource):
             )
             f.write("\n")
 
+    def try_extend_array_into_gap(
+        self,
+        gap_end: int,
+        accept_elem: Callable[[Any], bool],
+    ):
+        """Helper for implementing try_extend_into_gap, for resources whose cdata_ext
+        is an array (of a guessed length).
+
+        Extends the array with the elements found in the gap that accept_elem accepts,
+        stopping at the first rejected element.
+        Trailing all-zero elements are not added, as they are likely padding.
+        The new elements are not reported, so accept_elem should reject elements that
+        would need reporting (e.g. elements with non-NULL pointers).
+        """
+        assert self.file.data is not None
+        assert isinstance(self.cdata_ext, CDataExt_Array)
+        assert self.range_end is not None
+        elem_cdata_ext = self.cdata_ext.element_cdata_ext
+        elem_size = elem_cdata_ext.size
+        num_new = 0
+        last_nonzero_new = 0
+        offset = self.range_end
+        while offset + elem_size <= gap_end:
+            v = elem_cdata_ext.unpack_from(self.file.data, offset)
+            if not accept_elem(v):
+                break
+            num_new += 1
+            if any(self.file.data[offset : offset + elem_size]):
+                last_nonzero_new = num_new
+            offset += elem_size
+        num_new = last_nonzero_new
+        if num_new == 0:
+            return
+        new_length = self.cdata_ext.length + num_new
+        self.cdata_ext = CDataExt_Array(elem_cdata_ext, new_length)
+        self.range_end = self.range_start + self.cdata_ext.size
+        self.cdata_unpacked = self.cdata_ext.unpack_from(
+            self.file.data, self.range_start
+        )
+        if hasattr(self, "_length"):
+            self._length = new_length
+
 
 class CDataArrayResource(CDataResource):
     """Helper for variable-length array resources.

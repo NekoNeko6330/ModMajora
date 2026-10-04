@@ -512,6 +512,25 @@ class File:
                     resource.reporters.update(rbm.users)
         self.resource_buffer_markers_by_resource_type = dict()
 
+    def extend_resources_into_gaps(self):
+        """Let resources that support it extend into the gap following them.
+
+        This is for resources which length can only be guessed (typically variable-length
+        arrays with no terminator), where the guess may be too short.
+        See Resource.try_extend_into_gap
+        """
+        assert self._is_resources_sorted
+        assert self.data is not None
+
+        for i, resource in enumerate(self._resources):
+            assert resource.range_end is not None
+            if i + 1 < len(self._resources):
+                gap_end = self._resources[i + 1].range_start
+            else:
+                gap_end = len(self.data)
+            if resource.range_end < gap_end:
+                resource.try_extend_into_gap(gap_end)
+
     def add_unaccounted_resources(self, *, I_D_OMEGALUL: bool):
         assert self._is_resources_sorted
         assert self.data is not None
@@ -895,6 +914,16 @@ class Resource(abc.ABC):
         Then this will not be called again.
         """
         ...
+
+    def try_extend_into_gap(self, gap_end: int) -> None:
+        """Called once all resources are parsed, when there is a gap (unaccounted data)
+        between the end of this resource and gap_end.
+
+        Resources whose length is guessed may extend their range into that gap.
+        Implementations must not report new resources.
+        By default, do nothing.
+        """
+        pass
 
     @abc.abstractmethod
     def get_c_reference(self, resource_offset: int) -> str:

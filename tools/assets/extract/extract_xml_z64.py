@@ -262,6 +262,7 @@ def process_pool(
         print("unaccounted...")
 
     for file in memctx_by_file.keys():
+        file.extend_resources_into_gaps()
         file.add_unaccounted_resources(I_D_OMEGALUL=I_D_OMEGALUL)
 
     parse_all_files()  # FIXME this is to set is_data_parsed=True on binary blob unaccounteds, handle better

@@ -428,6 +428,12 @@ class CollisionBgCamListResource(CDataResource):
             )
         return RESOURCE_PARSE_SUCCESS
 
+    def try_extend_into_gap(self, gap_end: int):
+        # The length is guessed from the bgCamIndex used by the surface types,
+        # but there may be more (unused) entries.
+        # Only accept entries without camera data, as those would need reporting.
+        self.try_extend_array_into_gap(gap_end, lambda v: v["bgCamFuncData"] == 0)
+
     def get_c_declaration_base(self):
         if hasattr(self, "HACK_IS_STATIC_ON"):
             assert isinstance(self.cdata_ext, CDataExt_Array)

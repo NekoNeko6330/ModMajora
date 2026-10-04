@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from ..extase.memorymap import MemoryContext
 
 from ..extase import (
+    GetResourceAtResult,
     ResourceParseWaiting,
 )
 
@@ -273,13 +274,38 @@ class SpawnListResource(CDataArrayResource):
         return (Z64HDRPRFX + "scene.h",)
 
 
+def fmt_entrance(v: int):
+    """Format an entrance value (u16) using the ENTRANCE macro if possible"""
+    from tools import csdis
+
+    entrance_scene_names = csdis.parse_enum("z64scene.h", "EntranceSceneId")
+    scene = (v >> 9) & 0x7F
+    spawn = (v >> 4) & 0x1F
+    layer = v & 0xF
+    scene_name = entrance_scene_names.get(scene)
+    if scene_name is None or not scene_name.startswith("ENTR_SCENE_"):
+        return f"0x{v:04X}"
+    s = f"ENTRANCE({scene_name.removeprefix('ENTR_SCENE_')}, {spawn})"
+    if layer != 0:
+        s += f" + {layer}"
+    return s
+
+
 class ExitListResource(CDataArrayResource):
-    elem_cdata_ext = CDataExt_Value("h").set_write_str_v(lambda v: f"{v:#X}")
+    elem_cdata_ext = CDataExt_Value("H").set_write_str_v(fmt_entrance)
 
     # length set by SceneCommandsResource.try_parse_data
 
+    def try_extend_into_gap(self, gap_end: int):
+        # The length is guessed from the exits used by the collision,
+        # but scenes may define more exits than are used there.
+        self.try_extend_array_into_gap(gap_end, lambda v: True)
+
     def get_c_declaration_base(self):
-        return f"s16 {self.symbol_name}[]"
+        return f"u16 {self.symbol_name}[]"
+
+    def get_c_includes(self):
+        return (Z64HDRPRFX + "scene.h",)  # for ENTRANCE
 
     def get_h_includes(self):
         return ("ultra64.h",)
@@ -477,9 +503,47 @@ class PathListResource(CDataArrayResource):
 
     def try_parse_data(self, memory_context):
         if self._length is None:
-            # TODO guess
-            self.set_length(1)
+            self.set_length(self.guess_length(memory_context))
         return super().try_parse_data(memory_context)
+
+    def guess_length(self, memory_context: "MemoryContext"):
+        """Guess the amount of paths by checking which entries look like paths"""
+        from ..extase.memorymap import UnmappedAddressError
+
+        assert self.file.data is not None
+        length = 0
+        while True:
+            offset = self.range_start + length * self.elem_cdata_ext.size
+            if offset + self.elem_cdata_ext.size > len(self.file.data):
+                break
+            if length != 0:
+                # Stop at other resources
+                result, resource = self.file.get_resource_at(offset)
+                if result == GetResourceAtResult.DEFINITIVE and resource is not self:
+                    break
+            v = self.elem_cdata_ext.unpack_from(self.file.data, offset)
+            count = v["count"]
+            points = v["points"]
+            if count == 0 or points == 0 or points % 2 != 0:
+                break
+            try:
+                resolve_result = memory_context.resolve_segmented(points)
+            except UnmappedAddressError:
+                break
+            if resolve_result.file is not self.file:
+                break
+            points_start = resolve_result.file_offset
+            points_end = points_start + count * 6
+            if points_end > len(self.file.data):
+                break
+            # The points can't overlap the path list itself
+            if points_start < offset + self.elem_cdata_ext.size and self.range_start < points_end:
+                break
+            length += 1
+        if length == 0:
+            # Fall back to a single path, which will raise appropriate errors if wrong
+            length = 1
+        return length
 
     def get_c_declaration_base(self):
         return f"Path {self.symbol_name}[]"
