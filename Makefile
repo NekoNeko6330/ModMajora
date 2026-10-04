@@ -114,6 +114,8 @@ BASEROM_DIR   := baseroms/$(VERSION)
 # Builds with different compilers go to different directories, so their objects are never mixed
 ifeq ($(COMPILER),ido)
   BUILD_DIR   := build/$(VERSION)-ido
+else ifeq ($(TARGET),recomp)
+  BUILD_DIR   := build/$(VERSION)-recomp
 else
   BUILD_DIR   := build/$(VERSION)
 endif
@@ -132,8 +134,8 @@ else
   $(error Unsupported TARGET "$(TARGET)". Use n64 or recomp.)
 endif
 # Any FEATURE_X=value variable (e.g. `make FEATURE_CUSTOM_CAMERA=1`) overrides that feature's default
-FEATURE_OVERRIDES := $(foreach v,$(sort $(filter FEATURE_%,$(.VARIABLES))),-D$(v)_OVERRIDE=$($(v)))
-GAME_VERSION += $(TARGET_DEFINES) $(FEATURE_OVERRIDES)
+MM_FEATURE_DEFINES := $(foreach v,$(sort $(filter FEATURE_%,$(.VARIABLES))),-D$(v)_OVERRIDE=$($(v)))
+GAME_VERSION += $(TARGET_DEFINES) $(MM_FEATURE_DEFINES)
 
 
 #### Tools ####
@@ -634,13 +636,17 @@ init: distclean
 	$(MAKE) all
 	$(MAKE) diff-init
 
+## Majora's Mask: Recompiled mod (see docs/recomp.md)
+nrm:
+	$(PYTHON) -m tools.nrm -v $(VERSION) -j$(N_THREADS) $(foreach v,$(sort $(filter FEATURE_%,$(.VARIABLES))),-F $(v)=$($(v)))
+
 run: $(ROM)
 ifeq ($(N64_EMULATOR),)
 	$(error Emulator path not set. Set N64_EMULATOR in the Makefile, .make_options, or define it as an environment variable)
 endif
 	$(N64_EMULATOR) $<
 
-.PHONY: all rom compress clean assetclean distclean assets disasm init venv setup run
+.PHONY: all rom compress clean assetclean distclean assets disasm init venv setup run nrm
 .DEFAULT_GOAL := rom
 all: rom compress
 

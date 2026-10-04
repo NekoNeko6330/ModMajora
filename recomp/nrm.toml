@@ -1,0 +1,29 @@
+# Configuration of the Majora's Mask: Recompiled mod exported by `make nrm` (see docs/recomp.md)
+
+# Commit of the vanilla (matching) decompilation that changes are measured against.
+# Everything that differs between this commit and the current tree ends up in the mod.
+base_commit = "3b0d723b507e9e9602e46457712704d86fc51485"
+
+# File name of the mod, without extension (defaults to manifest.id)
+mod_filename = "modmajora"
+
+# Optional thumbnail shown in the recomp mod menu (PNG)
+# thumbnail = "recomp/thumb.png"
+
+# Allow replacing functions that Majora's Mask: Recompiled already patches itself.
+# Doing so disables the recomp's own changes to those functions.
+allow_force_patch = false
+
+# Feature overrides for the recomp build (see include/modmajora_config.h)
+[features]
+# CUSTOM_CAMERA = 0
+
+[manifest]
+id = "modmajora"
+version = "0.1.0"
+display_name = "ModMajora"
+description = "Changes made with ModMajora."
+short_description = "Changes made with ModMajora."
+authors = [ "ModMajora" ]
+game_id = "mm"
+minimum_recomp_version = "1.2.0"
