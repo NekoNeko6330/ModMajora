@@ -1792,4 +1792,35 @@ cdata_ext_gfx_segmented = (
     CDataExt_Value("I").set_report(report_gfx_segmented).set_write(write_gfx_segmented)
 )
 
+
+class GfxPointerArrayResource(CDataResource):
+    elem_cdata_ext = cdata_ext_gfx_segmented
+
+    def __init__(self, file: File, range_start: int, name: str, length: int):
+        assert length > 0
+        self.cdata_ext = CDataExt_Array(self.elem_cdata_ext, length)
+        super().__init__(file, range_start, name)
+
+    def get_c_declaration_base(self):
+        if hasattr(self, "HACK_IS_STATIC_ON"):
+            assert isinstance(self.cdata_ext, CDataExt_Array)
+            return f"Gfx* {self.symbol_name}[{self.cdata_ext.length}]"
+        return f"Gfx* {self.symbol_name}[]"
+
+    def get_c_reference(self, resource_offset: int):
+        if resource_offset == 0:
+            return self.symbol_name
+        else:
+            raise ValueError()
+
+    def get_c_expression_length(self, resource_offset: int):
+        if resource_offset == 0:
+            return f"ARRAY_COUNT({self.symbol_name})"
+        else:
+            raise ValueError()
+
+    def get_h_includes(self):
+        return ("ultra64.h",)
+
+
 VERBOSE2 = False

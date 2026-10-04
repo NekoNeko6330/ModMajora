@@ -494,6 +494,48 @@ class S16ArrayResource(CDataResource):
         return ("ultra64.h",)
 
 
+
+class U8ArrayResource(CDataResource):
+
+    elem_cdata_ext = CDataExt_Value.u8
+
+    def __init__(self, file: File, range_start: int, name: str, length: int):
+        assert length > 0
+        self.cdata_ext = CDataExt_Array(self.elem_cdata_ext, length)
+        super().__init__(file, range_start, name)
+
+    def write_extracted(self, memory_context):
+        values = self.cdata_unpacked
+        with self.extract_to_path.open("w") as f:
+            if not self.braces_in_source:
+                f.write("{\n")
+            for i in range(0, len(values), 16):
+                f.write("    ")
+                f.write(", ".join(f"0x{v:02X}" for v in values[i : i + 16]))
+                f.write(",\n")
+            if not self.braces_in_source:
+                f.write("}\n")
+
+    def get_c_declaration_base(self):
+        if hasattr(self, "HACK_IS_STATIC_ON"):
+            return f"u8 {self.symbol_name}[{self.cdata_ext.size}]"
+        return f"u8 {self.symbol_name}[]"
+
+    def get_c_reference(self, resource_offset: int):
+        if resource_offset == 0:
+            return self.symbol_name
+        else:
+            raise ValueError()
+
+    def get_c_expression_length(self, resource_offset: int):
+        if resource_offset == 0:
+            return f"ARRAY_COUNT({self.symbol_name})"
+        else:
+            raise ValueError()
+
+    def get_h_includes(self):
+        return ("ultra64.h",)
+
 cdata_ext_Vec3f = CDataExt_Struct(
     (
         ("x", CDataExt_Value.f32),

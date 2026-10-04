@@ -89,6 +89,9 @@ class S16ArrayResourceDesc(ResourceDesc):
 class U8ArrayResourceDesc(ResourceDesc):
     count: int
 
+    def get_size(self):
+        return self.count
+
 
 @dataclasses.dataclass(eq=False)
 class Vec3sArrayResourceDesc(ResourceDesc):
@@ -106,6 +109,9 @@ class VtxArrayResourceDesc(ResourceDesc):
 @dataclasses.dataclass(eq=False)
 class GfxPointerArrayResourceDesc(ResourceDesc):
     count: int
+
+    def get_size(self):
+        return self.count * 4
 
 
 def handler_Array(symbol_name, offset, collection, reselem: Element):

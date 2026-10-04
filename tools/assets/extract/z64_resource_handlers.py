@@ -12,7 +12,11 @@ from .extase import (
     Resource,
     BinaryBlobResource,
 )
-from .extase.cdata_resources import Vec3sArrayResource, S16ArrayResource
+from .extase.cdata_resources import (
+    Vec3sArrayResource,
+    S16ArrayResource,
+    U8ArrayResource,
+)
 
 from .extase_oot64 import (
     skeleton_resources,
@@ -333,6 +337,28 @@ def register_resource_handlers():
             resource_desc.count,
         )
 
+    def u8_array_resource_handler(
+        file: File,
+        resource_desc: n64resources.U8ArrayResourceDesc,
+    ):
+        return U8ArrayResource(
+            file,
+            resource_desc.offset,
+            resource_desc.symbol_name,
+            resource_desc.count,
+        )
+
+    def gfx_pointer_array_resource_handler(
+        file: File,
+        resource_desc: n64resources.GfxPointerArrayResourceDesc,
+    ):
+        return dlist_resources.GfxPointerArrayResource(
+            file,
+            resource_desc.offset,
+            resource_desc.symbol_name,
+            resource_desc.count,
+        )
+
     def vtx_array_resource_handler(
         file: File,
         resource_desc: n64resources.VtxArrayResourceDesc,
@@ -462,14 +488,6 @@ def register_resource_handlers():
             resource_desc.skeleton.limb_type == z64resources.KeyFrameSkelLimbType.FLEX,
         )
 
-    def HACK_PLACEHOLDER_resource_handler(file: File, resource_desc: ResourceDesc):
-        return BinaryBlobResource(
-            file,
-            resource_desc.offset,
-            resource_desc.offset + 4,
-            resource_desc.symbol_name,
-        )
-
     RESOURCE_HANDLERS.update(
         {
             z64resources.SkeletonResourceDesc: skeleton_resource_handler,
@@ -494,9 +512,8 @@ def register_resource_handlers():
             z64resources.PathListResourceDesc: path_list_resource_handler,
             z64resources.CutsceneResourceDesc: cutscene_resource_handler,
             z64resources.CollisionPolyArrayResourceDesc: collision_poly_list_resource_handler,
-            # TODO actually implement resources
-            n64resources.U8ArrayResourceDesc: HACK_PLACEHOLDER_resource_handler,
-            n64resources.GfxPointerArrayResourceDesc: HACK_PLACEHOLDER_resource_handler,
+            n64resources.U8ArrayResourceDesc: u8_array_resource_handler,
+            n64resources.GfxPointerArrayResourceDesc: gfx_pointer_array_resource_handler,
             z64resources.TextureAnimationResourceDesc: animated_material_resource_handler,
             z64resources.KeyFrameSkelResourceDesc: keyframe_skel_resource_handler,
             z64resources.KeyFrameAnimationResourceDesc: keyframe_animation_resource_handler,
