@@ -63,7 +63,7 @@ class CollisionVtxListResource(CDataResource):
             raise ValueError()
 
     def get_h_includes(self):
-        return ("z64math.h",)
+        return (Z64HDRPRFX + "math.h",)
 
 
 class CollisionPolyListResource(CDataResource):
@@ -343,7 +343,7 @@ class BgCamFuncDataResource(CDataResource):
         return f"&{self.symbol_name}[{index}]"
 
     def get_h_includes(self):
-        return ("z64math.h",)
+        return (Z64HDRPRFX + "math.h",)
 
 
 class CollisionBgCamListResource(CDataResource):
@@ -454,13 +454,13 @@ class CollisionWaterBoxesResource(CDataResource):
         bgCamIndex = (v >> 0) & 0xFF
         lightIndex = (v >> 8) & 0x1F
         room = (v >> 13) & 0x3F
-        setFlag19 = (v >> 19) & 1
+        isDisabled = (v >> 19) & 1
         return (
             "WATERBOX_PROPERTIES("
             f"/* bgCamIndex */ {bgCamIndex}, "
             f"/* lightIndex */ {lightIndex}, "
             f"/* room */ {room}, "
-            f"/* setFlag19 */ {'true' if setFlag19 else 'false'}"
+            f"/* isDisabled */ {'true' if isDisabled else 'false'}"
             ")"
         )
 
